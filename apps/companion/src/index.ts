@@ -243,8 +243,8 @@ async function handleRequest(req: Request): Promise<Response> {
     }
 
     if (path === "/api/pair/redeem" && req.method === "POST") {
-      const body = (await req.json()) as { pairCode: string };
-      const result = redeemPairCode(body.pairCode);
+      const body = (await req.json()) as { pairCode: string; deviceName?: string };
+      const result = redeemPairCode(body.pairCode, body.deviceName);
       if (!result) {
         return json({ error: "Invalid or expired pairing code." }, 401);
       }

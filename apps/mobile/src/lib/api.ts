@@ -237,7 +237,8 @@ export function parsePairPayload(raw: string): PairPayload | null {
 export async function redeemPairCode(
   host: string,
   companionPort: number,
-  pairCode: string
+  pairCode: string,
+  deviceName?: string
 ): Promise<{
   sessionToken: string;
   hostname: string;
@@ -247,6 +248,6 @@ export async function redeemPairCode(
   return fetchJson(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pairCode }),
+    body: JSON.stringify({ pairCode, deviceName }),
   });
 }

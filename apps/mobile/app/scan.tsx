@@ -16,6 +16,7 @@ import {
 import { useRouter, Stack } from "expo-router";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Haptics from "expo-haptics";
+import * as Device from "expo-device";
 import { parsePairPayload, redeemPairCode } from "../src/lib/api";
 import { addConnection } from "../src/lib/connections";
 
@@ -63,10 +64,12 @@ export default function ScanScreen() {
     }
 
     try {
+      const deviceName = Device.deviceName || Device.modelName || "Device";
       const result = await redeemPairCode(
         payload.host,
         payload.companionPort,
-        payload.pairCode
+        payload.pairCode,
+        deviceName
       );
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

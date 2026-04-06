@@ -231,7 +231,8 @@ export function createPairCode(ttlMs: number, label: string): { pairCode: string
  * Redeem a one-time pairing code. Returns session info if valid.
  */
 export function redeemPairCode(
-  code: string
+  code: string,
+  deviceName?: string
 ): { sessionToken: string; ttlMs: number; label: string } | null {
   const entry = pendingPairCodes.get(code);
   if (!entry) return null;
@@ -245,13 +246,16 @@ export function redeemPairCode(
   // One-time use
   pendingPairCodes.delete(code);
 
+  // Use device name if provided, otherwise fall back to generic label
+  const label = deviceName || entry.label;
+
   // Register the session with the chosen TTL
-  registerSession(entry.sessionToken, entry.label, entry.ttlMs);
+  registerSession(entry.sessionToken, label, entry.ttlMs);
 
   return {
     sessionToken: entry.sessionToken,
     ttlMs: entry.ttlMs,
-    label: entry.label,
+    label,
   };
 }
 
@@ -417,7 +421,7 @@ export function generatePickerPage(port: number): string {
 <body>
   <div class="card">
     <h1>T3 Code Remote</h1>
-    <p class="subtitle">Pair an iPad to this machine</p>
+    <p class="subtitle">Pair a device to this machine</p>
 
     <p class="section-label">Network</p>
     <div class="iface-list">
@@ -512,7 +516,7 @@ export async function generateQrPage(
   }
 
   const ttlLabel = TTL_OPTIONS.find((o) => o.value === ttlMs)?.label || `${Math.round(ttlMs / 3600000)}h`;
-  const { pairCode } = createPairCode(ttlMs, `iPad (${ip})`);
+  const { pairCode } = createPairCode(ttlMs, `Device (${ip})`);
 
   const payload = JSON.stringify({
     type: "t3code-remote",
@@ -566,7 +570,7 @@ export async function generateQrPage(
 <body>
   <div class="card">
     <h1>T3 Code Remote</h1>
-    <p class="subtitle">Scan this QR code with the iPad app</p>
+    <p class="subtitle">Scan this QR code with the app</p>
     <div class="qr-container">${qrSvg}</div>
     <ol class="steps">
       <li>Open <strong>T3 Code Remote</strong> on your iPad</li>
