@@ -19,7 +19,7 @@ import {
   touchConnection,
   type ServerConnection,
 } from "../../src/lib/connections";
-import { getT3WebUrl, getT3AuthInjectionJs } from "../../src/lib/api";
+import { getT3WebUrl, getT3AuthInjectionJs, validateSession } from "../../src/lib/api";
 
 export default function ConnectScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -34,12 +34,20 @@ export default function ConnectScreen() {
     (async () => {
       const conns = await loadConnections();
       const found = conns.find((c) => c.id === id);
-      if (found) {
-        setConn(found);
-        await touchConnection(found.id);
-      } else {
+      if (!found) {
         setError("Connection not found");
+        return;
       }
+
+      // Validate session before loading
+      const sessionValid = await validateSession(found);
+      if (!sessionValid) {
+        setError("Session expired or revoked. Re-pair this device.");
+        return;
+      }
+
+      setConn(found);
+      await touchConnection(found.id);
     })();
   }, [id]);
 

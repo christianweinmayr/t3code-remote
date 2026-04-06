@@ -80,6 +80,21 @@ export interface QuickPath {
   exists: boolean;
 }
 
+/** Check if the companion session token is still valid. */
+export async function validateSession(
+  conn: ServerConnection
+): Promise<boolean> {
+  try {
+    await fetchJson(companionUrl(conn, "/api/session/validate"), {
+      headers: companionHeaders(conn),
+      signal: createTimeout(3000),
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function checkCompanionHealth(
   conn: ServerConnection
 ): Promise<CompanionHealth> {

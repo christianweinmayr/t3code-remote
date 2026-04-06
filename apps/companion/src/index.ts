@@ -278,6 +278,11 @@ async function handleRequest(req: Request): Promise<Response> {
       return json({ error: "Unauthorized. Scan the QR code at /pair to connect." }, 401);
     }
 
+    // Session validation — used by the app before loading the WebView
+    if (path === "/api/session/validate") {
+      return json({ valid: true });
+    }
+
     if (path === "/api/discover") {
       const refresh = url.searchParams.get("refresh") === "true";
       const instances = await getInstances(refresh);

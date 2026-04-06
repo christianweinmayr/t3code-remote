@@ -20,9 +20,9 @@ import {
   deleteConnection,
   type ServerConnection,
 } from "../src/lib/connections";
-import { checkT3Health, checkCompanionHealth } from "../src/lib/api";
+import { checkT3Health, checkCompanionHealth, validateSession } from "../src/lib/api";
 
-type ConnectionStatus = "checking" | "online" | "offline" | "partial";
+type ConnectionStatus = "checking" | "online" | "offline" | "partial" | "expired";
 
 interface ConnectionWithStatus extends ServerConnection {
   status: ConnectionStatus;
@@ -46,19 +46,24 @@ export default function ConnectionList() {
       conns.map(async (conn) => {
         let companionOnline = false;
         let t3Online = false;
+        let sessionValid = true;
 
-        // Check companion and t3code independently with short timeouts
         try {
           await checkCompanionHealth(conn);
           companionOnline = true;
         } catch {}
 
+        if (companionOnline && conn.companionToken) {
+          sessionValid = await validateSession(conn);
+        }
+
         try {
           t3Online = await checkT3Health(conn);
         } catch {}
 
-        const status: ConnectionStatus =
-          companionOnline && t3Online
+        const status: ConnectionStatus = !sessionValid
+          ? "expired"
+          : companionOnline && t3Online
             ? "online"
             : companionOnline || t3Online
               ? "partial"
@@ -105,6 +110,18 @@ export default function ConnectionList() {
   const handleConnect = (conn: ConnectionWithStatus) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
+    if (conn.status === "expired") {
+      Alert.alert(
+        "Session Expired",
+        "Your session has expired or been revoked. Re-pair this device to reconnect.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Re-pair", onPress: () => router.push("/scan") },
+        ]
+      );
+      return;
+    }
+
     if (conn.status === "offline") {
       Alert.alert(
         "Server Offline",
@@ -132,11 +149,12 @@ export default function ConnectionList() {
   };
 
   const statusDot = (status: ConnectionStatus) => {
-    const colors = {
+    const colors: Record<ConnectionStatus, string> = {
       checking: "#6b7280",
       online: "#10b981",
       partial: "#f59e0b",
       offline: "#ef4444",
+      expired: "#ef4444",
     };
     return (
       <View
@@ -147,6 +165,7 @@ export default function ConnectionList() {
 
   const statusLabel = (status: ConnectionStatus, companionOnline: boolean) => {
     if (status === "checking") return "Checking...";
+    if (status === "expired") return "Session Expired";
     if (status === "online") return "Online";
     if (status === "partial")
       return companionOnline ? "t3 offline" : "No companion";
