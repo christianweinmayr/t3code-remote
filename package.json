@@ -1,0 +1,8 @@
+{
+  "name": "t3code-remote",
+  "private": true,
+  "scripts": {
+    "companion": "cd apps/companion && bun run start",
+    "mobile": "cd apps/mobile && npx expo start"
+  }
+}

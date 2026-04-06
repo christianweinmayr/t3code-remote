@@ -1,0 +1,16 @@
+node_modules/
+# dist/ is tracked for the companion bin launcher
+.expo/
+ios/
+android/
+*.tsbuildinfo
+.env
+.env.local
+bun.lock
+package-lock.json
+*.xcworkspace
+*.xcodeproj
+Pods/
+DerivedData/
+build/
+.DS_Store

@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "T3 Code Remote",
+    "slug": "t3code-remote",
+    "version": "0.1.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "scheme": "t3code-remote",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0a0a0a"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.christianweinmayr.t3coderemote",
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "T3 Code Remote needs local network access to connect to your development machines",
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0a0a0a"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.t3code.remote"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "developmentClient": {
+      "silentLaunch": true
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    }
+  }
+}
