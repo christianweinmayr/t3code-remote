@@ -47,14 +47,15 @@ export default function ConnectionList() {
         let companionOnline = false;
         let t3Online = false;
 
-        // Check companion and t3code independently
-        const [companionResult, t3Result] = await Promise.allSettled([
-          checkCompanionHealth(conn),
-          checkT3Health(conn),
-        ]);
+        // Check companion and t3code independently with short timeouts
+        try {
+          await checkCompanionHealth(conn);
+          companionOnline = true;
+        } catch {}
 
-        companionOnline = companionResult.status === "fulfilled";
-        t3Online = t3Result.status === "fulfilled" && t3Result.value;
+        try {
+          t3Online = await checkT3Health(conn);
+        } catch {}
 
         const status: ConnectionStatus =
           companionOnline && t3Online

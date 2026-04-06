@@ -84,7 +84,7 @@ export async function checkCompanionHealth(
   conn: ServerConnection
 ): Promise<CompanionHealth> {
   return fetchJson(companionUrl(conn, "/health"), {
-    signal: createTimeout(5000),
+    signal: createTimeout(3000),
   });
 }
 
@@ -162,7 +162,7 @@ export async function createProject(
 export async function checkT3Health(conn: ServerConnection): Promise<boolean> {
   try {
     const response = await fetch(t3Url(conn), {
-      signal: createTimeout(10000),
+      signal: createTimeout(3000),
       headers: conn.authToken
         ? { Authorization: `Bearer ${conn.authToken}` }
         : {},

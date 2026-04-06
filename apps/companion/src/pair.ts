@@ -434,8 +434,30 @@ export function generatePickerPage(port: number): string {
 
     async function revokeAll() {
       await fetch('/api/sessions/revoke-all', { method: 'POST' });
-      window.location.reload();
+      refreshSessions();
     }
+
+    async function refreshSessions() {
+      const res = await fetch('/api/sessions');
+      const data = await res.json();
+      const list = document.getElementById('sessionList');
+      if (!data.sessions || data.sessions.length === 0) {
+        list.innerHTML = '<p class="no-sessions">No active sessions</p>';
+        return;
+      }
+      list.innerHTML = data.sessions.map(function(s) {
+        return '<div class="session-row"><div>' +
+          '<span class="session-label">' + s.label + '</span>' +
+          '<span class="session-token">' + s.tokenPrefix + '</span>' +
+          '</div><div>' +
+          '<span class="session-expiry">expires ' + s.expiresIn + '</span>' +
+          '<button class="revoke-btn" onclick="revokeSession(\\'' + s.tokenPrefix + '\\')">Revoke</button>' +
+          '</div></div>';
+      }).join('');
+    }
+
+    // Auto-refresh sessions every 10s
+    setInterval(refreshSessions, 10000);
   </script>
 </body>
 </html>`;

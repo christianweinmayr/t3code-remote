@@ -61,8 +61,20 @@ export default function ConnectScreen() {
     webViewRef.current?.reload();
   };
 
-  // CSS injected before page content loads — persists through SPA navigation
+  // Injected before page content loads — persists through SPA navigation
   const injectedJsBeforeLoad = `
+    // Prevent zoom on input focus
+    var meta = document.querySelector('meta[name="viewport"]');
+    if (meta) {
+      meta.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
+    } else {
+      meta = document.createElement('meta');
+      meta.name = 'viewport';
+      meta.content = 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no';
+      document.documentElement.appendChild(meta);
+    }
+
+    // Force hover-only buttons visible
     var style = document.createElement('style');
     style.textContent = '[data-testid="new-thread-button"] { opacity: 1 !important; }';
     document.documentElement.appendChild(style);
@@ -73,12 +85,6 @@ export default function ConnectScreen() {
   const authJs = conn ? getT3AuthInjectionJs(conn) : "";
   const injectedJs = `
     ${authJs}
-
-    // Set viewport for proper scaling
-    var meta = document.createElement('meta');
-    meta.name = 'viewport';
-    meta.content = 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no';
-    document.head.appendChild(meta);
 
     // Add dark background immediately
     document.body.style.backgroundColor = '#0a0a0a';
