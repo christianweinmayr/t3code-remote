@@ -8,14 +8,14 @@
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "scheme": "t3code-remote",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0a0a0a"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.christianweinmayr.t3coderemote",
+      "splash": {
+        "image": "./assets/splash-icon.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#0a0a0a"
+      },
       "infoPlist": {
         "NSLocalNetworkUsageDescription": "T3 Code Remote needs local network access to connect to your development machines",
         "NSAppTransportSecurity": {
