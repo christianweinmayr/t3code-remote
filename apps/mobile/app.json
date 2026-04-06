@@ -16,6 +16,9 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.christianweinmayr.t3coderemote",
+      "entitlements": {
+        "com.apple.developer.device-information.user-assigned-device-name": true
+      },
       "infoPlist": {
         "NSLocalNetworkUsageDescription": "T3 Code Remote needs local network access to connect to your development machines",
         "NSAppTransportSecurity": {
