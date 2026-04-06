@@ -165,53 +165,216 @@ export default function ConnectScreen() {
     // Add dark background immediately
     document.body.style.backgroundColor = '#0a0a0a';
 
-    // Disable default iOS callout (select/copy) but keep our custom handler
+    // Disable native iOS callouts/selection so long-press can be repurposed.
+    document.documentElement.style.webkitTouchCallout = 'none';
+    document.documentElement.style.webkitUserSelect = 'none';
+    document.documentElement.style.userSelect = 'none';
     document.body.style.webkitTouchCallout = 'none';
     document.body.style.webkitUserSelect = 'none';
+    document.body.style.userSelect = 'none';
 
-    // Long-press to right-click: simulate contextmenu event on long touch
+    // Long-press to right-click: simulate a DOM contextmenu event on touch hold.
     (function() {
-      var timer = null;
-      var touchTarget = null;
+      if (window.__t3LongPressContextMenuInstalled) return;
+      window.__t3LongPressContextMenuInstalled = true;
+
       var LONG_PRESS_MS = 500;
+      var MOVE_THRESHOLD_PX = 12;
+      var CLICK_SUPPRESS_MS = 750;
+      var activePress = null;
+      var suppressClicksUntil = 0;
 
-      document.addEventListener('touchstart', function(e) {
-        touchTarget = e.target;
-        timer = setTimeout(function() {
-          if (!touchTarget) return;
-          var touch = e.changedTouches[0];
-          var evt = new MouseEvent('contextmenu', {
-            bubbles: true,
-            cancelable: true,
-            clientX: touch.clientX,
-            clientY: touch.clientY,
-            screenX: touch.screenX,
-            screenY: touch.screenY,
-          });
-          touchTarget.dispatchEvent(evt);
-          // Prevent the subsequent click
-          touchTarget.addEventListener('click', function stop(ev) {
-            ev.preventDefault();
-            ev.stopPropagation();
-            touchTarget.removeEventListener('click', stop, true);
-          }, { capture: true, once: true });
+      function getTouchById(touchList, identifier) {
+        if (!touchList) return null;
+        for (var i = 0; i < touchList.length; i += 1) {
+          if (touchList[i].identifier === identifier) return touchList[i];
+        }
+        return null;
+      }
+
+      function clearPress(press) {
+        if (!press) return;
+        press.cancelled = true;
+        if (press.timer) {
+          clearTimeout(press.timer);
+          press.timer = null;
+        }
+        if (activePress === press) {
+          activePress = null;
+        }
+      }
+
+      function heldLongEnough(press) {
+        return Boolean(press) && (Date.now() - press.startTime >= LONG_PRESS_MS);
+      }
+
+      function shouldSuppressMouseEvent() {
+        return Date.now() < suppressClicksUntil;
+      }
+
+      function suppressEvent(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (event.stopImmediatePropagation) {
+          event.stopImmediatePropagation();
+        }
+      }
+
+      function dispatchContextMenu(press) {
+        if (!press || press.cancelled || press.moved || press.longPressFired) return;
+        if (press.endTime && press.endTime - press.startTime < LONG_PRESS_MS) return;
+
+        press.longPressFired = true;
+        suppressClicksUntil = Date.now() + CLICK_SUPPRESS_MS;
+
+        var target =
+          document.elementFromPoint(press.lastClientX, press.lastClientY) ||
+          press.target;
+        if (!target) return;
+
+        var eventInit = {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          view: window,
+          detail: 0,
+          button: 2,
+          buttons: 2,
+          which: 3,
+          clientX: press.lastClientX,
+          clientY: press.lastClientY,
+          screenX: press.lastScreenX,
+          screenY: press.lastScreenY,
+        };
+
+        var contextMenuEvent;
+        try {
+          contextMenuEvent = new MouseEvent('contextmenu', eventInit);
+        } catch (error) {
+          contextMenuEvent = document.createEvent('MouseEvents');
+          contextMenuEvent.initMouseEvent(
+            'contextmenu',
+            true,
+            true,
+            window,
+            0,
+            press.lastScreenX,
+            press.lastScreenY,
+            press.lastClientX,
+            press.lastClientY,
+            false,
+            false,
+            false,
+            false,
+            2,
+            null
+          );
+        }
+
+        target.dispatchEvent(contextMenuEvent);
+      }
+
+      document.addEventListener('click', function(event) {
+        if (shouldSuppressMouseEvent()) {
+          suppressEvent(event);
+        }
+      }, { capture: true, passive: false });
+
+      document.addEventListener('touchstart', function(event) {
+        if (!event.changedTouches || event.changedTouches.length === 0) return;
+        if (event.touches.length !== 1) {
+          clearPress(activePress);
+          return;
+        }
+
+        clearPress(activePress);
+
+        var touch = event.changedTouches[0];
+        var press = {
+          identifier: touch.identifier,
+          target: event.target,
+          startTime: Date.now(),
+          endTime: 0,
+          startX: touch.clientX,
+          startY: touch.clientY,
+          lastClientX: touch.clientX,
+          lastClientY: touch.clientY,
+          lastScreenX: touch.screenX,
+          lastScreenY: touch.screenY,
+          moved: false,
+          cancelled: false,
+          longPressFired: false,
+          timer: null,
+        };
+
+        press.timer = setTimeout(function() {
+          dispatchContextMenu(press);
+          if (press.endTime || press.cancelled || press.moved) {
+            clearPress(press);
+          }
         }, LONG_PRESS_MS);
-      }, { passive: true });
 
-      document.addEventListener('touchmove', function() {
-        clearTimeout(timer);
-        touchTarget = null;
-      }, { passive: true });
+        activePress = press;
+      }, { capture: true, passive: false });
 
-      document.addEventListener('touchend', function() {
-        clearTimeout(timer);
-        touchTarget = null;
-      }, { passive: true });
+      document.addEventListener('touchmove', function(event) {
+        var press = activePress;
+        if (!press) return;
 
-      document.addEventListener('touchcancel', function() {
-        clearTimeout(timer);
-        touchTarget = null;
-      }, { passive: true });
+        var touch =
+          getTouchById(event.touches, press.identifier) ||
+          getTouchById(event.changedTouches, press.identifier);
+        if (!touch) return;
+
+        press.lastClientX = touch.clientX;
+        press.lastClientY = touch.clientY;
+        press.lastScreenX = touch.screenX;
+        press.lastScreenY = touch.screenY;
+
+        var deltaX = touch.clientX - press.startX;
+        var deltaY = touch.clientY - press.startY;
+        if ((deltaX * deltaX) + (deltaY * deltaY) > (MOVE_THRESHOLD_PX * MOVE_THRESHOLD_PX)) {
+          press.moved = true;
+          clearPress(press);
+          return;
+        }
+
+        if (press.longPressFired) {
+          suppressEvent(event);
+        }
+      }, { capture: true, passive: false });
+
+      document.addEventListener('touchend', function(event) {
+        var press = activePress;
+        if (!press) return;
+
+        var touch = getTouchById(event.changedTouches, press.identifier);
+        if (!touch) return;
+
+        press.lastClientX = touch.clientX;
+        press.lastClientY = touch.clientY;
+        press.lastScreenX = touch.screenX;
+        press.lastScreenY = touch.screenY;
+        press.endTime = Date.now();
+
+        if (press.longPressFired || heldLongEnough(press)) {
+          suppressClicksUntil = Date.now() + CLICK_SUPPRESS_MS;
+          suppressEvent(event);
+        }
+
+        // Do not clear the timer here; let the timeout decide whether the hold qualified.
+        if (press.longPressFired || press.endTime - press.startTime < LONG_PRESS_MS) {
+          activePress = null;
+        }
+      }, { capture: true, passive: false });
+
+      document.addEventListener('touchcancel', function(event) {
+        if (activePress && heldLongEnough(activePress)) {
+          suppressClicksUntil = Date.now() + CLICK_SUPPRESS_MS;
+          suppressEvent(event);
+        }
+        clearPress(activePress);
+      }, { capture: true, passive: false });
     })();
 
     true;
@@ -411,10 +574,10 @@ const styles = StyleSheet.create({
   },
   errorBannerText: { color: "#f87171", fontSize: 13 },
   retryInlineText: { color: "#fff", fontSize: 13, fontWeight: "500" },
-  headerRight: { flexDirection: "row", gap: 16 },
+  headerRight: { flexDirection: "row", gap: 24, paddingRight: 8 },
   headerButton: {
-    paddingHorizontal: 4,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
   },
   headerButtonText: { color: "#fff", fontSize: 14, fontWeight: "400" },
 });

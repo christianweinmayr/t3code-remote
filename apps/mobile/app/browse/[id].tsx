@@ -246,8 +246,9 @@ export default function FileBrowser() {
               <TouchableOpacity onPress={handleNewFolder} style={styles.headerBtn}>
                 <SymbolView name="folder.badge.plus" size={18} tintColor="#fff" />
               </TouchableOpacity>
-              <TouchableOpacity onPress={toggleSort} style={styles.headerBtn}>
-                <SymbolView name="arrow.up.arrow.down" size={16} tintColor="#fff" />
+              <TouchableOpacity onPress={toggleSort} style={styles.sortBtn}>
+                <SymbolView name="arrow.up.arrow.down" size={14} tintColor="#fff" />
+                <Text style={styles.sortBtnText}>{sortMode === "name" ? "A-Z" : "Date"}</Text>
               </TouchableOpacity>
               {listing && (
                 <TouchableOpacity
@@ -429,8 +430,15 @@ const styles = StyleSheet.create({
   errorText: { color: "#f87171", fontSize: 14, textAlign: "center" },
 
   // Header
-  headerRight: { flexDirection: "row", alignItems: "center", gap: 20, paddingRight: 4 },
-  headerBtn: { padding: 6 },
+  headerRight: { flexDirection: "row", alignItems: "center", gap: 24, paddingRight: 8 },
+  headerBtn: { padding: 10 },
+  sortBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    padding: 10,
+  },
+  sortBtnText: { color: "#fff", fontSize: 12, fontWeight: "500" },
   openBtn: {
     backgroundColor: "#fff",
     paddingHorizontal: 14,
