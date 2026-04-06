@@ -10,7 +10,9 @@
 
 import QRCode from "qrcode";
 import { randomBytes } from "node:crypto";
-import { networkInterfaces, hostname as getHostname } from "node:os";
+import { networkInterfaces, hostname as getHostname, homedir } from "node:os";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 
 export interface NetworkInterface {
   name: string;
@@ -26,11 +28,38 @@ export interface Session {
   lastUsedAt: number;
 }
 
-// --- Session store ---
+// --- Session store (persisted to disk) ---
+
+const SESSION_DIR = join(homedir(), ".t3code-remote");
+const SESSION_FILE = join(SESSION_DIR, "sessions.json");
 
 const sessions = new Map<string, Session>();
 
 const MAX_SESSIONS = 10;
+
+function saveSessions(): void {
+  try {
+    mkdirSync(SESSION_DIR, { recursive: true });
+    const data = Object.fromEntries(sessions);
+    writeFileSync(SESSION_FILE, JSON.stringify(data, null, 2));
+  } catch {}
+}
+
+function loadSessions(): void {
+  try {
+    const raw = readFileSync(SESSION_FILE, "utf-8");
+    const data = JSON.parse(raw) as Record<string, Session>;
+    const now = Date.now();
+    for (const [token, session] of Object.entries(data)) {
+      // Skip expired sessions (but keep never-expiring ones)
+      if (session.expiresAt !== 0 && now > session.expiresAt) continue;
+      sessions.set(token, session);
+    }
+  } catch {}
+}
+
+// Load sessions from disk on startup
+loadSessions();
 
 /** Register a new session token with a TTL. */
 export function registerSession(
@@ -59,6 +88,7 @@ export function registerSession(
     expiresAt: ttlMs === 0 ? 0 : now + ttlMs,
     lastUsedAt: now,
   });
+  saveSessions();
 }
 
 /** Validate a session token. Returns true if valid and not expired. */
@@ -76,7 +106,9 @@ export function isValidSessionToken(token: string): boolean {
 
 /** Revoke a session by token. */
 export function revokeSession(token: string): boolean {
-  return sessions.delete(token);
+  const result = sessions.delete(token);
+  saveSessions();
+  return result;
 }
 
 /** Revoke a session by token prefix (for the management UI). */
@@ -84,6 +116,7 @@ export function revokeByTokenPrefix(prefix: string): boolean {
   for (const [token] of sessions) {
     if ((token.slice(0, 8) + "...") === prefix) {
       sessions.delete(token);
+      saveSessions();
       return true;
     }
   }
@@ -93,6 +126,7 @@ export function revokeByTokenPrefix(prefix: string): boolean {
 /** Revoke all sessions. */
 export function revokeAllSessions(): void {
   sessions.clear();
+  saveSessions();
 }
 
 /** List all active (non-expired) sessions. Returns sanitized data (no full tokens). */
