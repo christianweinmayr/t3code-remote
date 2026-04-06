@@ -64,7 +64,7 @@ export default function ScanScreen() {
     }
 
     try {
-      const deviceName = Device.deviceName || Device.modelName || "Device";
+      const deviceName = Device.modelName || Device.deviceName || "Device";
       const result = await redeemPairCode(
         payload.host,
         payload.companionPort,
