@@ -3,7 +3,8 @@
  * Provides directory listing so the iPad app can pick project folders.
  */
 
-import { readdir, stat, access, constants, realpath } from "node:fs/promises";
+import { readdir, stat, access, constants, realpath, readFile, writeFile } from "node:fs/promises";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, resolve, dirname, sep } from "node:path";
 import { homedir } from "node:os";
 
@@ -156,12 +157,50 @@ async function checkIsProject(dirPath: string): Promise<boolean> {
   return results.some(Boolean);
 }
 
+// --- Bookmarks (persisted to disk) ---
+
+const BOOKMARKS_FILE = join(homedir(), ".t3code-remote", "bookmarks.json");
+
+interface Bookmark {
+  name: string;
+  path: string;
+}
+
+function loadBookmarks(): Bookmark[] {
+  try {
+    const raw = readFileSync(BOOKMARKS_FILE, "utf-8");
+    return JSON.parse(raw) as Bookmark[];
+  } catch {
+    return [];
+  }
+}
+
+function saveBookmarks(bookmarks: Bookmark[]): void {
+  try {
+    mkdirSync(dirname(BOOKMARKS_FILE), { recursive: true });
+    writeFileSync(BOOKMARKS_FILE, JSON.stringify(bookmarks, null, 2));
+  } catch {}
+}
+
+export function addBookmarkPath(path: string, name: string): void {
+  const bookmarks = loadBookmarks();
+  if (!bookmarks.some((b) => b.path === path)) {
+    bookmarks.push({ name, path });
+    saveBookmarks(bookmarks);
+  }
+}
+
+export function removeBookmarkPath(path: string): void {
+  const bookmarks = loadBookmarks();
+  saveBookmarks(bookmarks.filter((b) => b.path !== path));
+}
+
 /**
- * Get common project locations to show as quick-access bookmarks.
+ * Get quick-access bookmarks: defaults + custom.
  */
 export function getQuickPaths(): Array<{ name: string; path: string }> {
   const home = homedir();
-  return [
+  const defaults = [
     { name: "Home", path: home },
     { name: "Desktop", path: join(home, "Desktop") },
     { name: "Documents", path: join(home, "Documents") },
@@ -175,6 +214,19 @@ export function getQuickPaths(): Array<{ name: string; path: string }> {
     { name: "workspace", path: join(home, "workspace") },
     { name: "tmp", path: "/tmp" },
   ];
+
+  const custom = loadBookmarks();
+  const allPaths = new Set(defaults.map((d) => d.path));
+  const merged = [...defaults];
+
+  for (const b of custom) {
+    if (!allPaths.has(b.path)) {
+      merged.push(b);
+      allPaths.add(b.path);
+    }
+  }
+
+  return merged;
 }
 
 /**

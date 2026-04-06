@@ -1,13 +1,11 @@
 /**
- * Remote file browser — browse the remote filesystem via the companion server.
- * Lets users pick a folder and open it in t3code.
+ * Remote file browser.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   FlatList,
   StyleSheet,
@@ -26,6 +24,8 @@ import {
   getQuickPaths,
   createProject,
   createFolder,
+  addBookmark,
+  removeBookmark,
   type DirectoryEntry,
   type DirectoryListing,
   type QuickPath,
@@ -37,34 +37,28 @@ function formatDate(iso: string): string {
   const d = new Date(iso);
   const now = new Date();
   const diffMs = now.getTime() - d.getTime();
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffDays === 0) {
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  } else if (diffDays === 1) {
-    return "Yesterday";
-  } else if (diffDays < 7) {
-    return `${diffDays}d ago`;
-  } else if (diffDays < 365) {
-    return d.toLocaleDateString([], { month: "short", day: "numeric" });
-  }
-  return d.toLocaleDateString([], {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "Yesterday";
+  if (days < 365) return d.toLocaleDateString([], { month: "short", day: "numeric" });
+  return d.toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" });
 }
 
-function sortEntries(
-  entries: DirectoryEntry[],
-  mode: SortMode
-): DirectoryEntry[] {
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / 1048576).toFixed(1)} MB`;
+}
+
+function sortEntries(entries: DirectoryEntry[], mode: SortMode): DirectoryEntry[] {
   return [...entries].sort((a, b) => {
-    // Directories always first
     if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
-    if (mode === "modified") {
+    if (mode === "modified")
       return new Date(b.modified).getTime() - new Date(a.modified).getTime();
-    }
     return a.name.localeCompare(b.name);
   });
 }
@@ -78,6 +72,7 @@ export default function FileBrowser() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("modified");
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -92,10 +87,8 @@ export default function FileBrowser() {
           ]);
           setListing(dir);
           setQuickPaths(paths.paths);
-        } catch (err) {
-          setError(
-            `Could not connect to companion server at ${found.host}:${found.companionPort}`
-          );
+        } catch {
+          setError("Could not connect to companion server");
         }
       } else {
         setError("Connection not found");
@@ -120,42 +113,28 @@ export default function FileBrowser() {
     [conn]
   );
 
-  const [creating, setCreating] = useState(false);
-
   const handleOpenFolder = useCallback(
     (entry: DirectoryEntry) => {
       if (!conn) return;
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-      Alert.alert(
-        "Open in t3code",
-        `Open "${entry.name}" as a project?`,
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Open",
-            onPress: async () => {
-              setCreating(true);
-              try {
-                await createProject(conn, entry.path, entry.name);
-                Haptics.notificationAsync(
-                  Haptics.NotificationFeedbackType.Success
-                );
-                router.push({
-                  pathname: "/connect/[id]",
-                  params: { id: conn.id },
-                });
-              } catch (err) {
-                Haptics.notificationAsync(
-                  Haptics.NotificationFeedbackType.Error
-                );
-                Alert.alert("Error", `Failed to create project: ${err}`);
-              }
-              setCreating(false);
-            },
+      Alert.alert("Open as Project", `Open "${entry.name}" in T3 Code?`, [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Open",
+          onPress: async () => {
+            setCreating(true);
+            try {
+              await createProject(conn, entry.path, entry.name);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              router.push({ pathname: "/connect/[id]", params: { id: conn.id } });
+            } catch (err) {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+              Alert.alert("Error", `${err}`);
+            }
+            setCreating(false);
           },
-        ]
-      );
+        },
+      ]);
     },
     [conn, router]
   );
@@ -163,9 +142,7 @@ export default function FileBrowser() {
   const handleEntryPress = useCallback(
     (entry: DirectoryEntry) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      if (entry.isDirectory) {
-        navigateTo(entry.path);
-      }
+      if (entry.isDirectory) navigateTo(entry.path);
     },
     [navigateTo]
   );
@@ -175,11 +152,50 @@ export default function FileBrowser() {
     setSortMode((prev) => (prev === "name" ? "modified" : "name"));
   };
 
+  const handleToggleBookmark = useCallback(
+    async (entry: DirectoryEntry) => {
+      if (!conn) return;
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      const isBookmarked = quickPaths.some((q) => q.path === entry.path);
+      try {
+        if (isBookmarked) {
+          await removeBookmark(conn, entry.path);
+          setQuickPaths((prev) => prev.filter((q) => q.path !== entry.path));
+        } else {
+          await addBookmark(conn, entry.path, entry.name);
+          setQuickPaths((prev) => [...prev, { name: entry.name, path: entry.path, exists: true }]);
+        }
+      } catch {}
+    },
+    [conn, quickPaths]
+  );
+
+  const handleRemoveBookmark = useCallback(
+    (qp: QuickPath) => {
+      if (!conn) return;
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      Alert.alert("Remove Shortcut", `Remove "${qp.name}"?`, [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await removeBookmark(conn, qp.path);
+              setQuickPaths((prev) => prev.filter((q) => q.path !== qp.path));
+            } catch {}
+          },
+        },
+      ]);
+    },
+    [conn]
+  );
+
   const handleNewFolder = () => {
     if (!conn || !listing) return;
     Alert.prompt(
       "New Folder",
-      `Create a folder in ${listing.path.split("/").pop()}`,
+      undefined,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -189,9 +205,9 @@ export default function FileBrowser() {
             try {
               await createFolder(conn, listing.path, name.trim());
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              navigateTo(listing.path); // refresh
+              navigateTo(listing.path);
             } catch (err) {
-              Alert.alert("Error", `Failed to create folder: ${err}`);
+              Alert.alert("Error", `${err}`);
             }
           },
         },
@@ -205,7 +221,7 @@ export default function FileBrowser() {
   if (error && !conn) {
     return (
       <>
-        <Stack.Screen options={{ title: "File Browser" }} />
+        <Stack.Screen options={{ title: "Files" }} />
         <View style={styles.center}>
           <Text style={styles.errorText}>{error}</Text>
         </View>
@@ -225,10 +241,38 @@ export default function FileBrowser() {
         options={{
           title: currentDir,
           headerBackTitle: "Back",
+          headerRight: () => (
+            <View style={styles.headerRight}>
+              <TouchableOpacity onPress={handleNewFolder} style={styles.headerBtn}>
+                <SymbolView name="folder.badge.plus" size={18} tintColor="#fff" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={toggleSort} style={styles.headerBtn}>
+                <SymbolView name="arrow.up.arrow.down" size={16} tintColor="#fff" />
+              </TouchableOpacity>
+              {listing && (
+                <TouchableOpacity
+                  onPress={() =>
+                    handleOpenFolder({
+                      name: currentDir,
+                      path: listing.path,
+                      isDirectory: true,
+                      isSymlink: false,
+                      size: 0,
+                      modified: new Date().toISOString(),
+                      isProject: false,
+                    })
+                  }
+                  style={styles.openBtn}
+                >
+                  <Text style={styles.openBtnText}>Open</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          ),
         }}
       />
       <View style={styles.container}>
-        {/* Quick paths bar */}
+        {/* Quick paths */}
         {quickPaths.length > 0 && (
           <View style={styles.quickBar}>
             <FlatList
@@ -236,62 +280,50 @@ export default function FileBrowser() {
               data={quickPaths}
               keyExtractor={(item) => item.path}
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.quickBarContent}
+              contentContainerStyle={styles.quickBarInner}
               renderItem={({ item }) => (
                 <TouchableOpacity
-                  style={styles.quickChip}
+                  style={[
+                    styles.quickChip,
+                    listing?.path === item.path && styles.quickChipActive,
+                  ]}
                   onPress={() => navigateTo(item.path)}
+                  onLongPress={() => handleRemoveBookmark(item)}
                 >
-                  <Text style={styles.quickChipText}>{item.name}</Text>
+                  <Text
+                    style={[
+                      styles.quickChipText,
+                      listing?.path === item.path && styles.quickChipTextActive,
+                    ]}
+                  >
+                    {item.name}
+                  </Text>
                 </TouchableOpacity>
               )}
             />
           </View>
         )}
 
-        {/* Path bar + actions */}
+        {/* Path breadcrumb */}
         {listing && (
-          <View style={styles.pathBar}>
+          <View style={styles.breadcrumb}>
             {listing.parent && (
-              <TouchableOpacity
-                style={styles.iconButton}
-                onPress={() => navigateTo(listing.parent!)}
-              >
-                <SymbolView name="chevron.left" size={16} tintColor="#9ca3af" />
+              <TouchableOpacity onPress={() => navigateTo(listing.parent!)}>
+                <Text style={styles.breadcrumbBack}>
+                  {"< "}{listing.parent.split("/").pop() || "/"}
+                </Text>
               </TouchableOpacity>
             )}
-            <Text style={styles.pathText} numberOfLines={1}>
+            <Text style={styles.breadcrumbPath} numberOfLines={1}>
               {listing.path}
             </Text>
-            <TouchableOpacity style={styles.iconButton} onPress={handleNewFolder}>
-              <SymbolView name="folder.badge.plus" size={16} tintColor="#9ca3af" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.sortButton} onPress={toggleSort}>
-              <SymbolView name="arrow.up.arrow.down" size={14} tintColor="#9ca3af" />
-              <Text style={styles.sortLabel}>
-                {sortMode === "name" ? "A-Z" : "Date"}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.iconButton, styles.openButton]}
-              onPress={() =>
-                handleOpenFolder({
-                  name: currentDir,
-                  path: listing.path,
-                  isDirectory: true,
-                  isSymlink: false,
-                  size: 0,
-                  modified: new Date().toISOString(),
-                  isProject: false,
-                })
-              }
-            >
-              <SymbolView name="arrow.right.doc.on.clipboard" size={16} tintColor="#fff" />
-            </TouchableOpacity>
+            <Text style={styles.breadcrumbCount}>
+              {listing.entries.length} items
+            </Text>
           </View>
         )}
 
-        {/* Error banner */}
+        {/* Error */}
         {error && (
           <View style={styles.errorBanner}>
             <Text style={styles.errorBannerText}>{error}</Text>
@@ -301,11 +333,11 @@ export default function FileBrowser() {
         {/* Loading */}
         {loading && (
           <View style={styles.center}>
-            <ActivityIndicator size="large" color="#3b82f6" />
+            <ActivityIndicator size="small" color="#555" />
           </View>
         )}
 
-        {/* Directory listing */}
+        {/* File list */}
         {listing && !loading && (
           <FlatList
             data={sortedEntries}
@@ -319,56 +351,66 @@ export default function FileBrowser() {
                   if (item.isDirectory) handleOpenFolder(item);
                 }}
                 disabled={!item.isDirectory}
+                activeOpacity={item.isDirectory ? 0.6 : 1}
               >
-                <View style={styles.entryIcon}>
-                  <Text style={styles.entryIconText}>
-                    {item.isDirectory
-                      ? item.isProject
-                        ? "📦"
-                        : "📁"
-                      : "📄"}
-                  </Text>
-                </View>
-                <View style={styles.entryInfo}>
-                  <View style={styles.entryNameRow}>
-                    <Text
-                      style={[
-                        styles.entryName,
-                        !item.isDirectory && styles.entryNameFile,
-                      ]}
-                      numberOfLines={1}
-                    >
+                <View style={styles.entryLeft}>
+                  <Text style={styles.entryName} numberOfLines={1}>
+                    {item.isDirectory ? (item.isProject ? "+" : "+") : " "}{" "}
+                    <Text style={item.isDirectory ? styles.entryNameDir : styles.entryNameFile}>
                       {item.name}
                     </Text>
+                  </Text>
+                  <View style={styles.entryMeta}>
+                    <Text style={styles.entryDate}>{formatDate(item.modified)}</Text>
+                    {!item.isDirectory && item.size > 0 && (
+                      <Text style={styles.entrySize}>{formatSize(item.size)}</Text>
+                    )}
                     {item.isProject && (
-                      <Text style={styles.projectBadge}>project</Text>
+                      <View style={styles.projectBadge}>
+                        <Text style={styles.projectBadgeText}>PROJECT</Text>
+                      </View>
                     )}
                   </View>
-                  <Text style={styles.entryMeta}>
-                    {formatDate(item.modified)}
-                    {!item.isDirectory && item.size > 0
-                      ? `  ${(item.size / 1024).toFixed(1)} KB`
-                      : ""}
-                  </Text>
                 </View>
                 {item.isDirectory && (
-                  <Text style={styles.chevron}>›</Text>
+                  <View style={styles.entryActions}>
+                    <TouchableOpacity
+                      style={styles.starBtn}
+                      onPress={() => handleToggleBookmark(item)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Text style={[
+                        styles.starIcon,
+                        quickPaths.some((q) => q.path === item.path) && styles.starIconActive,
+                      ]}>
+                        {quickPaths.some((q) => q.path === item.path) ? "*" : "*"}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.entryOpenBtn}
+                      onPress={() => handleOpenFolder(item)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Text style={styles.entryOpenText}>Open</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.chevron}>{">"}</Text>
+                  </View>
                 )}
               </TouchableOpacity>
             )}
             ListEmptyComponent={
               <View style={styles.center}>
-                <Text style={styles.emptyText}>Empty directory</Text>
+                <Text style={styles.emptyText}>Empty</Text>
               </View>
             }
           />
         )}
 
-        {/* Creating project overlay */}
+        {/* Creating overlay */}
         {creating && (
           <View style={styles.overlay}>
-            <ActivityIndicator size="large" color="#3b82f6" />
-            <Text style={styles.overlayText}>Creating project...</Text>
+            <ActivityIndicator size="large" color="#fff" />
+            <Text style={styles.overlayText}>Opening project...</Text>
           </View>
         )}
       </View>
@@ -377,116 +419,136 @@ export default function FileBrowser() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0a0a0a" },
+  container: { flex: 1, backgroundColor: "#000" },
   center: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     padding: 40,
   },
-  errorText: { color: "#ef4444", fontSize: 15, textAlign: "center" },
+  errorText: { color: "#f87171", fontSize: 14, textAlign: "center" },
+
+  // Header
+  headerRight: { flexDirection: "row", alignItems: "center", gap: 20, paddingRight: 4 },
+  headerBtn: { padding: 6 },
+  openBtn: {
+    backgroundColor: "#fff",
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    borderRadius: 14,
+  },
+  openBtnText: { color: "#000", fontSize: 13, fontWeight: "600" },
+
+  // Quick paths
   quickBar: {
     borderBottomWidth: 1,
-    borderBottomColor: "#1a1a1a",
+    borderBottomColor: "#111",
   },
-  quickBarContent: { paddingHorizontal: 12, paddingVertical: 8, gap: 8 },
+  quickBarInner: { paddingHorizontal: 16, paddingVertical: 10, gap: 6 },
   quickChip: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#111",
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    paddingVertical: 5,
+    borderRadius: 14,
   },
-  quickChipText: { color: "#9ca3af", fontSize: 13 },
-  pathBar: {
+  quickChipActive: {
+    backgroundColor: "#fff",
+  },
+  quickChipText: { color: "#666", fontSize: 13 },
+  quickChipTextActive: { color: "#000" },
+
+  // Breadcrumb
+  breadcrumb: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "#1a1a1a",
+    borderBottomColor: "#111",
     gap: 8,
   },
-  pathText: {
+  breadcrumbBack: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  breadcrumbPath: {
     flex: 1,
-    color: "#6b7280",
-    fontSize: 12,
+    color: "#444",
+    fontSize: 11,
     fontFamily: "monospace",
   },
-  iconButton: {
-    backgroundColor: "#1a1a1a",
-    width: 32,
-    height: 32,
-    borderRadius: 6,
-    alignItems: "center",
-    justifyContent: "center",
+  breadcrumbCount: {
+    color: "#333",
+    fontSize: 11,
   },
-  iconButtonText: { color: "#9ca3af", fontSize: 14, fontWeight: "600" },
-  sortButton: {
-    backgroundColor: "#1a1a1a",
-    height: 32,
-    borderRadius: 6,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 8,
-    gap: 4,
-  },
-  sortLabel: { color: "#9ca3af", fontSize: 11, fontWeight: "600" },
-  openButton: {
-    backgroundColor: "#3b82f6",
-  },
+
+  // Error
   errorBanner: {
-    backgroundColor: "#7f1d1d",
+    backgroundColor: "#1a0000",
+    borderBottomWidth: 1,
+    borderBottomColor: "#2d0a0a",
     padding: 10,
   },
-  errorBannerText: { color: "#fca5a5", fontSize: 13, textAlign: "center" },
+  errorBannerText: { color: "#f87171", fontSize: 13, textAlign: "center" },
+
+  // List
   list: { paddingBottom: 100 },
+
+  // Entry
   entry: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 11,
     borderBottomWidth: 1,
-    borderBottomColor: "#111",
+    borderBottomColor: "#0d0d0d",
   },
-  entryIcon: { width: 32, alignItems: "center" },
-  entryIconText: { fontSize: 18 },
-  entryInfo: {
-    flex: 1,
-    marginLeft: 8,
+  entryLeft: { flex: 1 },
+  entryName: {
+    fontSize: 15,
+    color: "#fff",
+    marginBottom: 2,
   },
-  entryNameRow: {
+  entryNameDir: { color: "#fff", fontWeight: "400" },
+  entryNameFile: { color: "#555" },
+  entryMeta: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
-  entryName: { fontSize: 15, color: "#fff", flexShrink: 1 },
-  entryNameFile: { color: "#6b7280" },
-  entryMeta: {
-    fontSize: 11,
-    color: "#4b5563",
-    marginTop: 2,
-  },
+  entryDate: { fontSize: 11, color: "#333" },
+  entrySize: { fontSize: 11, color: "#333" },
   projectBadge: {
-    fontSize: 10,
-    color: "#10b981",
-    backgroundColor: "#064e3b",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    overflow: "hidden",
-    textTransform: "uppercase",
-    fontWeight: "600",
+    backgroundColor: "#052e1c",
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 3,
   },
-  chevron: { color: "#4b5563", fontSize: 20, fontWeight: "300" },
-  emptyText: { color: "#4b5563", fontSize: 14 },
+  projectBadgeText: {
+    fontSize: 9,
+    color: "#34d399",
+    fontWeight: "600",
+    letterSpacing: 0.5,
+  },
+  entryActions: { flexDirection: "row", alignItems: "center", gap: 8 },
+  starBtn: { padding: 2 },
+  starIcon: { fontSize: 18, color: "#333" },
+  starIconActive: { color: "#fbbf24" },
+  entryOpenBtn: {
+    borderWidth: 1,
+    borderColor: "#222",
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  entryOpenText: { color: "#666", fontSize: 11, fontWeight: "500" },
+  chevron: { color: "#333", fontSize: 16, fontWeight: "300" },
+  emptyText: { color: "#333", fontSize: 14 },
   overlay: {
     position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.8)",
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.85)",
     justifyContent: "center",
     alignItems: "center",
     zIndex: 10,

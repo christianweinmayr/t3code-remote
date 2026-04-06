@@ -5,10 +5,7 @@ import { LogBox, NativeModules } from "react-native";
 
 export default function RootLayout() {
   useEffect(() => {
-    // Disable yellow box warnings bar
     LogBox.ignoreAllLogs(true);
-
-    // Disable shake-to-show dev menu
     if (__DEV__) {
       const DevSettings = NativeModules.DevSettings;
       if (DevSettings?.setIsShakeToShowDevMenuEnabled) {
@@ -22,10 +19,11 @@ export default function RootLayout() {
       <StatusBar style="light" />
       <Stack
         screenOptions={{
-          headerStyle: { backgroundColor: "#0a0a0a" },
+          headerStyle: { backgroundColor: "#000" },
           headerTintColor: "#fff",
-          headerTitleStyle: { fontWeight: "600" },
-          contentStyle: { backgroundColor: "#0a0a0a" },
+          headerTitleStyle: { fontWeight: "600", fontSize: 17 },
+          contentStyle: { backgroundColor: "#000" },
+          headerShadowVisible: false,
         }}
       >
         <Stack.Screen name="index" options={{ headerShown: false }} />

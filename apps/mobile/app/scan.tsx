@@ -174,8 +174,8 @@ export default function ScanScreen() {
   );
 }
 
-const CORNER_SIZE = 24;
-const CORNER_WIDTH = 3;
+const CS = 28;
+const CW = 2;
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },
@@ -183,74 +183,71 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#0a0a0a",
+    backgroundColor: "#000",
     padding: 40,
   },
-  text: { color: "#9ca3af", fontSize: 15, textAlign: "center", marginBottom: 20 },
+  text: { color: "#666", fontSize: 15, textAlign: "center", marginBottom: 24 },
   button: {
-    backgroundColor: "#3b82f6",
+    backgroundColor: "#fff",
     paddingHorizontal: 24,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: 20,
   },
-  buttonText: { color: "#fff", fontSize: 15, fontWeight: "600" },
+  buttonText: { color: "#000", fontSize: 15, fontWeight: "600" },
   camera: { flex: 1 },
   overlay: {
     position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    top: 0, left: 0, right: 0, bottom: 0,
     justifyContent: "center",
     alignItems: "center",
   },
   scanArea: {
-    width: 260,
-    height: 260,
+    width: 240,
+    height: 240,
     position: "relative",
   },
   corner: {
     position: "absolute",
-    width: CORNER_SIZE,
-    height: CORNER_SIZE,
+    width: CS,
+    height: CS,
   },
   topLeft: {
     top: 0, left: 0,
-    borderTopWidth: CORNER_WIDTH, borderLeftWidth: CORNER_WIDTH,
-    borderColor: "#3b82f6",
+    borderTopWidth: CW, borderLeftWidth: CW,
+    borderColor: "#fff",
   },
   topRight: {
     top: 0, right: 0,
-    borderTopWidth: CORNER_WIDTH, borderRightWidth: CORNER_WIDTH,
-    borderColor: "#3b82f6",
+    borderTopWidth: CW, borderRightWidth: CW,
+    borderColor: "#fff",
   },
   bottomLeft: {
     bottom: 0, left: 0,
-    borderBottomWidth: CORNER_WIDTH, borderLeftWidth: CORNER_WIDTH,
-    borderColor: "#3b82f6",
+    borderBottomWidth: CW, borderLeftWidth: CW,
+    borderColor: "#fff",
   },
   bottomRight: {
     bottom: 0, right: 0,
-    borderBottomWidth: CORNER_WIDTH, borderRightWidth: CORNER_WIDTH,
-    borderColor: "#3b82f6",
+    borderBottomWidth: CW, borderRightWidth: CW,
+    borderColor: "#fff",
   },
   instruction: {
     color: "#fff",
     fontSize: 14,
     textAlign: "center",
-    marginTop: 32,
+    marginTop: 28,
     paddingHorizontal: 40,
-    opacity: 0.8,
+    opacity: 0.6,
   },
   pairingBox: {
-    backgroundColor: "rgba(0,0,0,0.8)",
-    borderRadius: 16,
+    backgroundColor: "rgba(0,0,0,0.85)",
+    borderRadius: 12,
     padding: 32,
     alignItems: "center",
   },
   pairingText: {
     color: "#fff",
-    fontSize: 16,
+    fontSize: 15,
     marginTop: 12,
   },
 });

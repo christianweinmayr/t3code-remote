@@ -144,6 +144,29 @@ export async function scanProjects(
   );
 }
 
+export async function addBookmark(
+  conn: ServerConnection,
+  path: string,
+  name: string
+): Promise<{ success: boolean }> {
+  return fetchJson(companionUrl(conn, "/api/fs/bookmarks"), {
+    method: "POST",
+    headers: companionHeaders(conn),
+    body: JSON.stringify({ path, name }),
+  });
+}
+
+export async function removeBookmark(
+  conn: ServerConnection,
+  path: string
+): Promise<{ success: boolean }> {
+  return fetchJson(companionUrl(conn, "/api/fs/bookmarks/remove"), {
+    method: "POST",
+    headers: companionHeaders(conn),
+    body: JSON.stringify({ path }),
+  });
+}
+
 export async function createFolder(
   conn: ServerConnection,
   parentPath: string,

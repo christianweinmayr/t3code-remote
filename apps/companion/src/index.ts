@@ -16,6 +16,8 @@ import {
   getQuickPaths,
   scanForProjects,
   assertAllowedPath,
+  addBookmarkPath,
+  removeBookmarkPath,
 } from "./filesystem";
 import { T3Bridge } from "./t3bridge";
 import {
@@ -339,6 +341,20 @@ async function handleRequest(req: Request): Promise<Response> {
       assertAllowedPath(fullPath);
       await mkdir(fullPath, { recursive: false });
       return json({ success: true, path: fullPath });
+    }
+
+    // Add a bookmark
+    if (path === "/api/fs/bookmarks" && req.method === "POST") {
+      const body = (await req.json()) as { path: string; name: string };
+      addBookmarkPath(body.path, body.name);
+      return json({ success: true });
+    }
+
+    // Remove a bookmark
+    if (path === "/api/fs/bookmarks/remove" && req.method === "POST") {
+      const body = (await req.json()) as { path: string };
+      removeBookmarkPath(body.path);
+      return json({ success: true });
     }
 
     if (path === "/api/project/create" && req.method === "POST") {
