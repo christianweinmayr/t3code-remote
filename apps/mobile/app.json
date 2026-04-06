@@ -36,7 +36,8 @@
       "bundler": "metro"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "./plugins/with-ios-webview-no-zoom"
     ],
     "developmentClient": {
       "silentLaunch": true

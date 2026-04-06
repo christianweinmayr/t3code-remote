@@ -71,21 +71,89 @@ export default function ConnectScreen() {
 
   // Injected before page content loads — persists through SPA navigation
   const injectedJsBeforeLoad = `
-    // Prevent zoom on input focus
-    var meta = document.querySelector('meta[name="viewport"]');
-    if (meta) {
-      meta.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
-    } else {
-      meta = document.createElement('meta');
-      meta.name = 'viewport';
-      meta.content = 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no';
-      document.documentElement.appendChild(meta);
-    }
+    (function() {
+      var viewportContent = 'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover';
 
-    // Force hover-only buttons visible
-    var style = document.createElement('style');
-    style.textContent = '[data-testid="new-thread-button"] { opacity: 1 !important; }';
-    document.documentElement.appendChild(style);
+      function ensureViewportMeta() {
+        var meta = document.querySelector('meta[name="viewport"]');
+        if (!meta) {
+          meta = document.createElement('meta');
+          meta.name = 'viewport';
+          (document.head || document.documentElement).appendChild(meta);
+        }
+        if (meta.getAttribute('content') !== viewportContent) {
+          meta.setAttribute('content', viewportContent);
+        }
+      }
+
+      function isEditableTarget(target) {
+        if (!target || !(target instanceof Element)) return false;
+        return Boolean(target.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"], [contenteditable]:not([contenteditable="false"])'));
+      }
+
+      function enforceNoZoom() {
+        ensureViewportMeta();
+        if (document.documentElement) {
+          document.documentElement.style.webkitTextSizeAdjust = '100%';
+        }
+      }
+
+      function enforceEditableNoZoom(target) {
+        if (!isEditableTarget(target)) return;
+        enforceNoZoom();
+
+        // iOS can re-apply page zoom on editable focus after the focus event fires.
+        [0, 50, 150, 300].forEach(function(delay) {
+          setTimeout(function() {
+            enforceNoZoom();
+            if (window.visualViewport && window.visualViewport.scale && window.visualViewport.scale !== 1) {
+              window.scrollTo(window.scrollX, window.scrollY);
+            }
+          }, delay);
+        });
+      }
+
+      enforceNoZoom();
+
+      var rootObserver = new MutationObserver(function() {
+        enforceNoZoom();
+      });
+      rootObserver.observe(document.documentElement, { childList: true, subtree: true });
+
+      var headObserver = new MutationObserver(function() {
+        enforceNoZoom();
+      });
+      if (document.head) {
+        headObserver.observe(document.head, { childList: true, subtree: true, attributes: true });
+      }
+
+      var style = document.createElement('style');
+      style.textContent = [
+        'html { -webkit-text-size-adjust: 100% !important; }',
+        'input, textarea, select, [contenteditable], [contenteditable] * { font-size: 16px !important; }',
+        '* { touch-action: manipulation; }',
+        '[data-testid="new-thread-button"] { opacity: 1 !important; }',
+      ].join('\\n');
+      (document.head || document.documentElement).appendChild(style);
+
+      document.addEventListener('focusin', function(event) {
+        enforceEditableNoZoom(event.target);
+      }, true);
+
+      window.addEventListener('resize', enforceNoZoom, true);
+      window.addEventListener('orientationchange', enforceNoZoom, true);
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', enforceNoZoom, true);
+      }
+
+      document.addEventListener('touchmove', function(event) {
+        if (event.touches.length > 1) event.preventDefault();
+      }, { passive: false });
+
+      document.addEventListener('gesturestart', function(event) {
+        event.preventDefault();
+      }, { passive: false });
+    })();
     true;
   `;
 
@@ -260,6 +328,7 @@ export default function ConnectScreen() {
           domStorageEnabled
           allowsBackForwardNavigationGestures={false}
           allowsInlineMediaPlayback
+          scrollEnabled={true}
           mediaPlaybackRequiresUserAction={false}
           startInLoadingState
           renderLoading={() => (
